@@ -1,10 +1,10 @@
 require("dotenv").config();
-const db = require("../config/db");
 const { sendMail } = require("../services/mailService");
 const {
   adminContactNotificationEmail,
   userContactConfirmationEmail,
 } = require("../utils/emailTemplates");
+const pool = require("../config/db"); // Importing the database connection pool
 
 const handleContact = async (req, res) => {
   const { name, email, message } = req.body;
@@ -12,44 +12,56 @@ const handleContact = async (req, res) => {
   if (!name || !email || !message)
     return res.status(400).json({ error: "All fields are required." });
 
-  db.run(
-    `INSERT INTO contacts (name, email, message) VALUES (?, ?, ?)`,
-    [name, email, message],
-    async function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  try {
 
-      try {
-        await sendMail({
-          from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
-          to: process.env.EMAIL_USER,
-          subject: `Website Contact Submission : ${name}`,
-          html: adminContactNotificationEmail(name, email, message),
-        });
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS contacts (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100),
+        email VARCHAR(100),
+        message TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-        await sendMail({
-          from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
-          to: email,
-          subject: `Hello ${name}, Thank you for contacting us`,
-          html: userContactConfirmationEmail(name),
-        });
+    await pool.query(
+      `INSERT INTO contacts (name, email, message) VALUES ($1, $2, $3)`,
+      [name, email, message]
+    );
 
-        res.json({
-          success: true,
-          message: "Message received and emails sent.",
-        });
-      } catch (emailError) {
-        console.error(emailError);
-        res.status(500).json({ error: "Failed to send email." });
-      }
-    }
-  );
+    await sendMail({
+      from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
+      to: process.env.EMAIL_USER,
+      subject: `Website Contact Submission : ${name}`,
+      html: adminContactNotificationEmail(name, email, message),
+    });
+
+    await sendMail({
+      from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: `Hello ${name}, Thank you for contacting us`,
+      html: userContactConfirmationEmail(name),
+    });
+
+    res.json({
+      success: true,
+      message: "Message received and emails sent.",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Something went wrong." });
+  }
 };
 
-const getAllContacts = (req, res) => {
-  db.all(`SELECT * FROM contacts ORDER BY created_at DESC`, [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
+const getAllContacts = async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM contacts ORDER BY created_at DESC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 };
 
 module.exports = {

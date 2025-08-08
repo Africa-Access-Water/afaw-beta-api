@@ -3,6 +3,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 require('dotenv').config();
 const contactRoutes = require('./routes/contactRoutes');
+const blogRoutes = require('./routes/blogRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -19,6 +20,9 @@ app.get('/', (req, res) => {
 
 // Routes
 app.use('/api', contactRoutes);
+app.use('/api', blogRoutes);
+
+
 
 
 // Start Server

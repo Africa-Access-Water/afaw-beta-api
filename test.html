@@ -1,13 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <title>Contact Us</title>
+  <meta charset="UTF-8" />
+  <title>Submit a Blog Post</title>
   <style>
     body {
       font-family: Arial, sans-serif;
+      max-width: 600px;
       margin: 40px auto;
-      width: 400px;
+      padding: 20px;
+    }
+
+    h2 {
+      margin-bottom: 20px;
     }
 
     form {
@@ -15,23 +21,29 @@
       flex-direction: column;
     }
 
-    input, textarea {
+    input,
+    textarea,
+    select {
       margin-bottom: 15px;
       padding: 10px;
       font-size: 1em;
     }
 
+    textarea {
+      resize: vertical;
+    }
+
     button {
       padding: 10px;
       font-size: 1em;
-      background-color: #007BFF;
+      background-color: #28a745;
       color: white;
       border: none;
       cursor: pointer;
     }
 
     button:hover {
-      background-color: #0056b3;
+      background-color: #218838;
     }
 
     .status {
@@ -40,49 +52,60 @@
     }
   </style>
 </head>
+
 <body>
-  <h2>Contact Us</h2>
-  <form id="contactForm">
-    <input type="text" name="name" placeholder="Your Name" required />
-    <input type="email" name="email" placeholder="Your Email" required />
-    <textarea name="message" placeholder="Your Message" rows="5" required></textarea>
-    <button type="submit">Send</button>
-    <div class="status" id="status"></div>
+
+  <h2>Submit a Blog Post</h2>
+
+  <form action="http://localhost:5000/api/blog" method="POST" enctype="multipart/form-data">
+    <input type="text" name="title" placeholder="Title" required />
+    <input type="text" name="author" placeholder="Author" required />
+    <textarea name="content" placeholder="Blog content" required></textarea>
+    <input type="file" name="image" accept="image/*" />
+    <button type="submit">Submit Blog</button>
   </form>
 
+
+
   <script>
-    const form = document.getElementById('contactForm');
+    const form = document.getElementById('blogForm');
     const status = document.getElementById('status');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
       const formData = {
-        name: form.name.value,
-        email: form.email.value,
-        message: form.message.value
+        title: form.title.value,
+        author: form.author.value,
+        content: form.content.value,
+        tags: form.tags.value,
+        published: form.published.checked,
+        published_at: form.published_at.value || null
       };
 
-      status.textContent = 'Sending...';
+      status.textContent = 'Submitting...';
 
       try {
-        const res = await fetch('http://localhost:5000/api/contact', {
+        const res = await fetch('http://localhost:5000/api/blogs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData)
         });
 
         const data = await res.json();
+
         if (res.ok) {
-          status.textContent = '✅ Thank you! Your message has been sent.';
+          status.textContent = '✅ Blog submitted successfully!';
           form.reset();
         } else {
           status.textContent = '❌ Error: ' + (data.error || 'Something went wrong.');
         }
       } catch (err) {
-        status.textContent = '❌ Network error.';
+        status.textContent = '⚠️ Network error.';
       }
     });
   </script>
+
 </body>
+
 </html>

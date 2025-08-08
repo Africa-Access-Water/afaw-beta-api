@@ -1,29 +1,12 @@
-const sqlite3 = require('sqlite3').verbose();
-const fs = require('fs');
-const path = require('path');
+// config/db.js
+const { Pool } = require("pg");
+require("dotenv").config();
 
-const dbDir = path.join(__dirname, 'database');
-if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-}
-
-
-const dbPath = path.join(dbDir, 'afaw.db');
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) return console.error('❌ DB Error:', err.message);
-    console.log(`Database connected!`);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false, // needed for hosted DB like Render
+  },
 });
 
-db.serialize(() => {
-    db.run(`
-        CREATE TABLE IF NOT EXISTS contacts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            email TEXT,
-            message TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    `);
-});
-
-module.exports = db;
+module.exports = pool;

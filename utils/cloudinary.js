@@ -28,4 +28,29 @@ const blogMediaStorage = new CloudinaryStorage({
   },
 });
 
-module.exports = { cloudinary, blogMediaStorage };
+
+const postMediaStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "posts",
+    allowed_formats: ["jpg", "png", "jpeg", "gif", "mp4", "webm"],
+    public_id: (req, file) => Date.now() + "-" + file.originalname,
+  },
+});
+
+const teamMediaStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "teams",
+    allowed_formats: ["jpg", "png", "jpeg", "gif", "mp4", "webm"],
+    public_id: (req, file) => Date.now() + "-" + file.originalname,
+  },
+});
+
+
+module.exports = {
+  cloudinary,
+  blogMediaStorage,
+  postMediaStorage,
+  teamMediaStorage,
+};

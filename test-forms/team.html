@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Submit Team Member</title>
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+</head>
+<body>
+  <div class="container mt-5">
+    <h2 class="mb-4">Submit Team Member</h2>
+    <form id="teamForm" enctype="multipart/form-data">
+      <div class="mb-3">
+        <label for="type" class="form-label">Type</label>
+        <select class="form-select" id="type" name="type" required>
+          <option value="" selected disabled>Select type</option>
+          <option value="Member">Member</option>
+          <option value="Volunteer">Volunteer</option>
+          <option value="Board Member">Board Member</option>
+          <option value="Partner">Partner</option>
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label for="title" class="form-label">Title</label>
+        <input
+          type="text"
+          class="form-control"
+          id="title"
+          name="title"
+          placeholder="Mr., Ms., Dr., etc."
+        />
+      </div>
+
+      <div class="mb-3">
+        <label for="fullname" class="form-label">Full Name</label>
+        <input
+          type="text"
+          class="form-control"
+          id="full_name"
+          name="full_name"
+          required
+        />
+      </div>
+
+      <div class="mb-3">
+        <label for="socials" class="form-label">Social Links (comma separated URLs)</label>
+        <input
+          type="text"
+          class="form-control"
+          id="socials"
+          name="socials"
+          placeholder="https://twitter.com/example, https://linkedin.com/in/example"
+        />
+      </div>
+
+      <div class="mb-3">
+        <label for="position" class="form-label">Position / Title</label>
+        <input
+          type="text"
+          class="form-control"
+          id="position"
+          name="position"
+        />
+      </div>
+
+      <div class="mb-3">
+        <label for="bio" class="form-label">Bio</label>
+        <textarea
+          class="form-control"
+          id="bio"
+          name="bio"
+          rows="4"
+          placeholder="Brief bio or description"
+        ></textarea>
+      </div>
+
+      <div class="mb-3">
+        <label for="image" class="form-label">Profile Image (optional)</label>
+        <input
+          class="form-control"
+          type="file"
+          id="image"
+          name="image"
+          accept="image/*"
+        />
+      </div>
+
+      <button type="submit" class="btn btn-primary">Submit Team Member</button>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById("teamForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const form = e.target;
+      const formData = new FormData(form);
+
+      try {
+        const res = await fetch("http://localhost:5000/api/teams", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          alert("Team member submitted successfully!");
+          form.reset();
+        } else {
+          alert(data.error || "Failed to submit team member");
+        }
+      } catch (error) {
+        alert("Error: " + error.message);
+      }
+    });
+  </script>
+</body>
+</html>

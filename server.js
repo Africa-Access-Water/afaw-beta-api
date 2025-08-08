@@ -4,6 +4,8 @@ const bodyParser = require('body-parser');
 require('dotenv').config();
 const contactRoutes = require('./routes/contactRoutes');
 const blogRoutes = require('./routes/blogRoutes');
+const postRoutes = require('./routes/postRoutes');
+const teamRoutes = require("./routes/teamRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -21,6 +23,8 @@ app.get('/', (req, res) => {
 // Routes
 app.use('/api', contactRoutes);
 app.use('/api', blogRoutes);
+app.use('/api', postRoutes);
+app.use("/api", teamRoutes);
 
 
 

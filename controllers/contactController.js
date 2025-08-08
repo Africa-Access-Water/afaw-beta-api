@@ -4,31 +4,32 @@ const {
   adminContactNotificationEmail,
   userContactConfirmationEmail,
 } = require("../utils/emailTemplates");
-const pool = require("../config/db"); // Importing the database connection pool
+const knex = require("../config/db"); // make sure knex is initialized properly
 
 const handleContact = async (req, res) => {
   const { name, email, message } = req.body;
 
-  if (!name || !email || !message)
+  if (!name || !email || !message) {
     return res.status(400).json({ error: "All fields are required." });
+  }
 
   try {
+    // Create table if it doesn't exist
+    const hasTable = await knex.schema.hasTable("contacts");
+    if (!hasTable) {
+      await knex.schema.createTable("contacts", (table) => {
+        table.increments("id").primary();
+        table.string("name", 100);
+        table.string("email", 100);
+        table.text("message");
+        table.timestamp("created_at").defaultTo(knex.fn.now());
+      });
+    }
 
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS contacts (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(100),
-        email VARCHAR(100),
-        message TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+    // Insert data
+    await knex("contacts").insert({ name, email, message });
 
-    await pool.query(
-      `INSERT INTO contacts (name, email, message) VALUES ($1, $2, $3)`,
-      [name, email, message]
-    );
-
+    // Send admin email
     await sendMail({
       from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
       to: process.env.EMAIL_USER,
@@ -36,6 +37,7 @@ const handleContact = async (req, res) => {
       html: adminContactNotificationEmail(name, email, message),
     });
 
+    // Send confirmation to user
     await sendMail({
       from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
       to: email,
@@ -55,10 +57,8 @@ const handleContact = async (req, res) => {
 
 const getAllContacts = async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT * FROM contacts ORDER BY created_at DESC`
-    );
-    res.json(result.rows);
+    const contacts = await knex("contacts").orderBy("created_at", "desc");
+    res.json(contacts);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

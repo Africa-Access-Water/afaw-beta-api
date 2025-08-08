@@ -1,12 +1,6 @@
-// config/db.js
-const { Pool } = require("pg");
-require("dotenv").config();
+// db.js
+const environment = process.env.NODE_ENV || "development";
+const config = require("../knexfile")[environment];
+const knex = require("knex")(config);
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false, // needed for hosted DB like Render
-  },
-});
-
-module.exports = pool;
+module.exports = knex;

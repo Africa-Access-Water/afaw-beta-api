@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 const teamController = require("../controllers/teamController");
 const authMiddleware = require("../middleware/authMiddleware");
+
 router.use(authMiddleware);
 
 router.get("/teams", teamController.getTeams);

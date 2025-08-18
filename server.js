@@ -22,11 +22,12 @@ app.get('/', (req, res) => {
 });
 
 // Routes
+app.use('/api/auth', authRoutes);
 app.use('/api', contactRoutes);
 app.use('/api', blogRoutes);
 app.use('/api', postRoutes);
 app.use("/api", teamRoutes);
-app.use('/api/auth', authRoutes);
+
 
 
 

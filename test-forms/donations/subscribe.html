@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recurring Donation</title>
+</head>
+<body>
+  <h1>Recurring Donation</h1>
+
+  <form id="subscribeForm">
+    <label>
+      Name:
+      <input type="text" name="name" placeholder="Your Name" required>
+    </label>
+    <br><br>
+    <label>
+      Email:
+      <input type="email" name="email" placeholder="Your Email" required>
+    </label>
+    <br><br>
+    <label>
+      Amount (USD):
+      <input type="number" name="amount" placeholder="Amount" required>
+    </label>
+    <br><br>
+    <label>
+      Interval:
+      <select name="interval" required>
+        <option value="month">Monthly</option>
+        <option value="year">Yearly</option>
+      </select>
+    </label>
+    <br><br>
+    <button type="submit">Subscribe</button>
+  </form>
+
+  <script>
+    const form = document.getElementById('subscribeForm');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const data = {
+        name: form.name.value,
+        email: form.email.value,
+        amount: parseFloat(form.amount.value),
+        interval: form.interval.value
+      };
+
+      try {
+        const response = await fetch('http://localhost:5000/api/donations/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          // Redirect to Stripe Checkout
+          window.location.href = result.url;
+        } else {
+          alert(result.error || 'Something went wrong.');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Failed to connect to server.');
+      }
+    });
+  </script>
+</body>
+</html>

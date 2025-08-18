@@ -6,6 +6,7 @@ const contactRoutes = require('./routes/contactRoutes');
 const blogRoutes = require('./routes/blogRoutes');
 const postRoutes = require('./routes/postRoutes');
 const teamRoutes = require("./routes/teamRoutes");
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -25,6 +26,7 @@ app.use('/api', contactRoutes);
 app.use('/api', blogRoutes);
 app.use('/api', postRoutes);
 app.use("/api", teamRoutes);
+app.use('/api/auth', authRoutes);
 
 
 

@@ -4,6 +4,9 @@ const postController = require("../controllers/postController");
 const multer = require("multer");
 const { postMediaStorage } = require("../utils/cloudinary");
 const upload = multer({ storage: postMediaStorage });
+const authMiddleware = require("../middleware/authMiddleware");
+
+router.use(authMiddleware);
 
 // Routes
 router.post("/posts", upload.single("image"), postController.createPost);

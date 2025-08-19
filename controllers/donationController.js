@@ -1,150 +1,153 @@
+// controllers/donationController.js
 const Donor = require("../models/donorModel");
 const Donation = require("../models/donationModel");
 const Subscription = require("../models/subscriptionModel");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-module.exports = {
-  // One-time donation with Stripe Checkout
-  async createDonation(req, res) {
-    try {
-      const { email, name, amount } = req.body;
+/**
+ * Create Stripe Checkout Session (one-time or recurring)
+ */
+exports.createCheckoutSession = async (req, res) => {
+  try {
+    const { name, email, amount, currency, interval, recurring } = req.body;
+    console.log('Checkout data:', { name, email, amount, currency, interval, recurring });
 
-      // Find or create donor
-      let donor = await Donor.findByEmail(email);
-      if (!donor) {
-        const donorId = await Donor.create({ email, name });
-        donor = await Donor.findById(donorId);
-      }
+    // 1. Check if donor exists
+    let donor = await Donor.findByEmail(email);
+    let donorId;
 
-      // Create Stripe Checkout Session
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        customer_email: email,
-        line_items: [
-          {
-            price_data: {
-              currency: "usd",
-              product_data: { name: "One-Time Donation" },
-              unit_amount: Math.round(amount * 100),
+    if (!donor) {
+      donorId = await Donor.create({ name, email });
+      donor = { id: donorId, name, email };
+    } else {
+      donorId = donor.id;
+    }
+
+    // 2. Create Stripe customer if not exists
+    if (!donor.stripe_customer_id) {
+      const customer = await stripe.customers.create({
+        name: donor.name,
+        email: donor.email,
+      });
+      await Donor.updateStripeCustomerId(donorId, customer.id);
+      donor.stripe_customer_id = customer.id;
+    }
+
+    // 3. Create Stripe Checkout session
+    const sessionData = {
+      customer: donor.stripe_customer_id,
+      payment_method_types: ['card'],
+      mode: recurring ? 'subscription' : 'payment',
+      line_items: [
+        {
+          price_data: {
+            currency,
+            product_data: {
+              name: recurring ? 'Recurring Donation' : 'One-Time Donation',
             },
-            quantity: 1,
+            unit_amount: Math.round(amount * 100),
+            recurring: recurring ? { interval } : undefined,
           },
-        ],
-        mode: "payment",
-        success_url:
-          "http://localhost:5000/success?session_id={CHECKOUT_SESSION_ID}",
-        cancel_url: "http://localhost:5000/cancel",
-      });
+          quantity: 1,
+        },
+      ],
+      success_url: `${process.env.CLIENT_URL}/donation-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.CLIENT_URL}/donation-cancel`,
+    };
 
-      // Save donation as pending
-      await Donation.create({
-        donor_id: donor.id,
-        amount,
-        currency: "usd",
-        stripe_payment_intent_id: session.payment_intent,
-        status: "pending",
-      });
+    const session = await stripe.checkout.sessions.create(sessionData);
 
-      res.json({ url: session.url }); // send Stripe checkout link
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Unable to create donation session" });
-    }
-  },
-
-  // Recurring donation (subscription) with Stripe Checkout
-  async createSubscription(req, res) {
-    try {
-      const { email, name, amount, interval } = req.body;
-
-      // Validate interval
-      const validIntervals = ["day", "week", "month", "year"];
-      if (!validIntervals.includes(interval)) {
-        return res.status(400).json({
-          error: "Invalid interval. Must be day, week, month, or year.",
-        });
-      }
-
-      // Find or create donor
-      let donor = await Donor.findByEmail(email);
-      if (!donor) {
-        const donorId = await Donor.create({ email, name });
-        donor = await Donor.findById(donorId);
-      }
-
-      // Create or reuse Stripe Customer
-      let customerId = donor.stripe_customer_id;
-      if (!customerId) {
-        const customer = await stripe.customers.create({ email, name });
-        customerId = customer.id;
-
-        // Save customerId to donor using Knex
-        await Donor.updateStripeCustomerId(donor.id, customerId);
-      }
-
-      // Create a Stripe product dynamically
-      const product = await stripe.products.create({
-        name: `Recurring Donation - ${name}`,
-      });
-
-      // Create a Stripe price for the subscription
-      const price = await stripe.prices.create({
-        unit_amount: Math.round(amount * 100), // in cents
-        currency: "usd",
-        recurring: { interval }, // day, week, month, year
-        product: product.id,
-      });
-
-      // Create subscription Checkout Session
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        customer: customerId,
-        line_items: [{ price: price.id, quantity: 1 }],
-        mode: "subscription",
-        success_url:
-          "http://localhost:5000/success?session_id={CHECKOUT_SESSION_ID}",
-        cancel_url: "http://localhost:5000/cancel",
-      });
-
-      // Save subscription as pending (actual subscription id comes via webhook)
+    // 4. Save subscription if recurring
+    if (recurring) {
       await Subscription.create({
-        donor_id: donor.id,
-        stripe_subscription_id: session.subscription, // THIS IS NULL
+        donor_id: donorId,
         amount,
-        currency: "usd",
+        currency,
         interval,
-        status: "pending",
-      });
-
-      // Save subscription with session ID first
-      const subscriptionRecordId = await Subscription.create({
-        donor_id: donor.id,
-        stripe_checkout_session_id: session.id, // save session ID
-        amount,
-        currency: "usd",
-        interval,
-        status: "pending",
-      });
-
-      // Send Stripe checkout link
-      res.json({ url: session.url });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        error: "Unable to create subscription session",
-        details: error.message,
+        status: 'pending',
+        stripe_checkout_session_id: session.id,
       });
     }
-  },
-  // Inside donationController.js
-  async getDonations(req, res) {
-    try {
-      const { donorId } = req.params;
-      const donations = await Donation.findByDonorId(donorId);
-      res.json(donations);
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Unable to fetch donations" });
+
+    return res.json({ url: session.url });
+  } catch (err) {
+    console.error('Checkout session error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// 5. Shortcut for recurring donations
+exports.createSubscription = async (req, res) => {
+  req.body.recurring = true; // force recurring
+  req.body.interval = req.body.interval || 'month'; // default
+  return exports.createCheckoutSession(req, res); // reuse existing function
+};
+
+/**
+ * Webhook handler for Stripe events
+ */
+exports.stripeWebhookHandler = async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.error("Webhook signature error:", err);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+
+    if (session.mode === "subscription") {
+      // Get actual subscription details from Stripe
+      const stripeSubscription = await stripe.subscriptions.retrieve(session.subscription);
+
+      // Update subscription record
+      await Subscription.updateBySessionId(session.id, {
+        stripe_subscription_id: stripeSubscription.id,
+        status: "active",
+      });
+    } else if (session.mode === "payment") {
+      // Update donation record
+      await Donation.updateBySessionId(session.id, {
+        stripe_payment_intent: session.payment_intent,
+        status: "completed",
+      });
     }
-  },
+  }
+
+  res.json({ received: true });
+};
+
+
+/**
+ * Get all donations
+ */
+exports.getDonations = async (req, res) => {
+  try {
+    const donations = await Donation.findAll();
+    res.json(donations);
+  } catch (error) {
+    console.error("Get donations error:", error);
+    res.status(500).json({ error: "Unable to fetch donations" });
+  }
+};
+
+/**
+ * Get all donors
+ */
+exports.getDonors = async (req, res) => {
+  try {
+    const donors = await Donor.findAll();
+    res.json(donors);
+  } catch (error) {
+    console.error("Get all donors error:", error);
+    res.status(500).json({ error: "Unable to fetch donors" });
+  }
 };

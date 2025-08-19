@@ -6,9 +6,22 @@ class Donation {
     return id;
   }
 
-  static async findByDonor(donorId) {
+  static async findByDonorId(donorId) {
     return knex('donations').where({ donor_id: donorId }).orderBy('created_at', 'desc');
   }
+  static async findAll() {
+    return knex('donations').orderBy('created_at', 'desc');
+  }
+  
+  static async findById(id) {
+    return knex('donations').where({ id }).first();
+  }
+
+  static async update(id, data) {
+    await knex('donations').where({ id }).update(data);
+    return this.findById(id);
+  }
+
 }
 
 module.exports = Donation;

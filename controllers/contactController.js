@@ -64,7 +64,17 @@ const getAllContacts = async (req, res) => {
   }
 };
 
+const getAllDonations = async (req, res) => {
+  try {
+    const donations = await knex("donations").orderBy("created_at", "desc");
+    res.json(donations);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 module.exports = {
   handleContact,
   getAllContacts,
+  getAllDonations,
 };

@@ -6,17 +6,15 @@ class Subscription {
     return id;
   }
 
-  static async findByDonor(donorId) {
-    return knex('subscriptions').where({ donor_id: donorId });
+  static async findById(id) {
+    return knex('subscriptions').where({ id }).first();
   }
 
-  static async updateStripeSubscriptionId(sessionId, subscriptionId, status) {
-  await knex('subscriptions')
-    .where({ stripe_checkout_session_id: sessionId })
-    .update({ stripe_subscription_id: subscriptionId, status });
-}
-
-
+  static async updateStatus(id, status) {
+    await knex('subscriptions')
+      .where({ id })
+      .update({ status });
+  }
 }
 
 module.exports = Subscription;

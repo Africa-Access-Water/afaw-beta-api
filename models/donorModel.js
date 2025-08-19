@@ -1,7 +1,11 @@
-// Donor.js
 const knex = require('../config/db');
 
 class Donor {
+
+  static async findAll() {
+    return knex('donors').orderBy('created_at', 'desc');
+  }
+
   static async findByEmail(email) {
     return knex('donors').where({ email }).first();
   }
@@ -11,8 +15,15 @@ class Donor {
   }
 
   static async create(data) {
-    const [id] = await knex('donors').insert(data);
-    return id;
+    let id;
+    // Use .returning('id') for Postgres; for SQLite it will just return the inserted id
+    if (knex.client.config.client === 'pg') {
+      [id] = await knex('donors').insert(data).returning('id');
+    } else {
+      id = await knex('donors').insert(data);
+    }
+
+    return { id, ...data };
   }
 
   static async updateStripeCustomerId(id, stripeCustomerId) {

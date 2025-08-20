@@ -22,36 +22,15 @@ app.get('/', (req, res) => {
     res.send('Server Status: Running ✅');
 });
 
-app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-
-    // Retrieve subscription from Stripe
-    const stripeSubscription = await stripe.subscriptions.retrieve(session.subscription);
-
-    // Update your DB
-    await Subscription.updateStripeSubscriptionId(session.id, stripeSubscription.id, 'active');
-  }
-
-  res.json({ received: true });
-});
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/donations', donationRoutes);
-app.use('/api', contactRoutes);
-app.use('/api', blogRoutes);
 app.use('/api', postRoutes);
 app.use("/api", teamRoutes);
+app.use('/api', contactRoutes);
+app.use('/api', blogRoutes);
+
 
 
 

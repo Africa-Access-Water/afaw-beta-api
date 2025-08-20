@@ -2,24 +2,23 @@ const express = require('express');
 const router = express.Router();
 const donationController = require('../controllers/donationController');
 
-// Create Checkout Session (from frontend form)
+// --- Stripe Routes ---
 router.post('/donate', donationController.createCheckoutSession);
 
-// Stripe Webhook endpoint (Stripe calls this directly)
 router.post(
-  '/stripe/ webhook',
-  express.raw({ type: 'application/json' }), // must use raw body for signature validation
+  '/stripe/webhook',  // ✅ fixed path
+  express.raw({ type: 'application/json' }), // required for signature validation
   donationController.stripeWebhookHandler
 );
 
-// New route for recurring donations
+// --- Recurring Donations ---
 router.post('/subscribe', donationController.createSubscription);
 
+// --- Donation Data Routes ---
+router.get('/donations', donationController.getDonations); // all donations (admin)
+router.get('/donors', donationController.getDonors);       // list donors
 
-// Get donations by donor
-router.get('/:donorId', donationController.getDonations);
-
-// Success + Cancel routes for Stripe Checkout
+// --- Checkout Result Pages ---
 router.get("/success", (req, res) => {
   res.send("Payment successful! 🎉 Thank you for your donation.");
 });
@@ -27,10 +26,5 @@ router.get("/success", (req, res) => {
 router.get("/cancel", (req, res) => {
   res.send("Payment canceled. ❌ You can try again anytime.");
 });
-
-// Get all donations (admin route)
-router.get('/donations', donationController.getDonations);
-
-router.get('/donors', donationController.getDonors);
 
 module.exports = router;

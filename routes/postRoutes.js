@@ -6,13 +6,13 @@ const { postMediaStorage } = require("../utils/cloudinary");
 const upload = multer({ storage: postMediaStorage });
 const authMiddleware = require("../middleware/authMiddleware");
 
-router.use(authMiddleware);
-
-// Routes
-router.post("/posts", upload.single("image"), postController.createPost);
+// --- Public routes ---
 router.get("/posts", postController.getPosts);
 router.get("/posts/:id", postController.getPostById);
-router.put("/posts/:id", upload.single("image"), postController.updatePost);
-router.delete("/posts/:id", postController.deletePost);
+
+// --- Protected routes ---
+router.post("/posts", authMiddleware, upload.single("image"), postController.createPost);
+router.put("/posts/:id", authMiddleware, upload.single("image"), postController.updatePost);
+router.delete("/posts/:id", authMiddleware, postController.deletePost);
 
 module.exports = router;

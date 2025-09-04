@@ -15,15 +15,13 @@ class Donor {
   }
 
   static async create(data) {
-    let id;
     // Use .returning('id') for Postgres; for SQLite it will just return the inserted id
     if (knex.client.config.client === 'pg') {
-      [id] = await knex('donors').insert(data).returning('id');
+      const [result] = await knex('donors').insert(data).returning('id');
+      return result.id;
     } else {
-      id = await knex('donors').insert(data);
+      return await knex('donors').insert(data);
     }
-
-    return { id, ...data };
   }
 
   static async updateStripeCustomerId(id, stripeCustomerId) {

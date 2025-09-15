@@ -9,7 +9,6 @@ exports.up = function (knex) {
     table.string("email").notNullable().unique();
     table.string("password").notNullable();
     table.string("role").defaultTo("user");
-    table.enu("status", ["pending", "rejected", "accepted"]).defaultTo("pending");
     table.string("avatar_url").defaultTo("https://cdn-icons-png.flaticon.com/512/847/847969.png");
     table.boolean("is_verified").defaultTo(false);
     table.string("reset_token");

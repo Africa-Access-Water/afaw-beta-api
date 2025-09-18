@@ -30,22 +30,24 @@ const signup = async (req, res) => {
     // Default avatar URL
     const defaultAvatar = "https://cdn-icons-png.flaticon.com/512/847/847969.png";
 
-    // Create user
+    // Create user with pending status
     const [newUser] = await UserModel.create({
       name,
       email,
       password: hashedPassword,
       role: role || "contributor",
-      avatar_url: defaultAvatar
+      avatar_url: defaultAvatar,
+      status: "pending"
     });
 
     res.status(201).json({ 
-      message: "User created successfully", 
+      message: "Registration request submitted successfully", 
       user: {
         id: newUser.id,
         name: newUser.name,
         email: newUser.email,
         role: newUser.role,
+        status: newUser.status,
         avatar_url: newUser.avatar_url
       }
     });
@@ -66,6 +68,16 @@ const login = async (req, res) => {
 
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) return res.status(400).json({ error: "Invalid email or password" });
+
+    // Check if user's registration request is still pending
+    if (user.status === "pending") {
+      return res.status(403).json({ error: "Your registration request is still pending approval" });
+    }
+
+    // Check if user's registration request was rejected
+    if (user.status === "rejected") {
+      return res.status(403).json({ error: "Your registration request has been rejected" });
+    }
 
     // generate JWT
     const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, {

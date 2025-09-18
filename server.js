@@ -8,6 +8,7 @@ const postRoutes = require('./routes/postRoutes');
 const teamRoutes = require("./routes/teamRoutes");
 const authRoutes = require("./routes/authRoutes");
 const donationRoutes = require('./routes/donationRoutes');
+const pdfRoutes = require('./routes/pdfRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -30,6 +31,7 @@ app.use('/api', postRoutes);
 app.use("/api", teamRoutes);
 app.use('/api', contactRoutes);
 app.use('/api', blogRoutes);
+app.use('/api/pdf', pdfRoutes);
 
 
 

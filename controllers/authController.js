@@ -35,7 +35,7 @@ const signup = async (req, res) => {
       name,
       email,
       password: hashedPassword,
-      role: role || "user",
+      role: role || "contributor",
       avatar_url: defaultAvatar
     });
 

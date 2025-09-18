@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { handleContact, getAllContacts } = require('../controllers/contactController');
-const authMiddleware = require('../middleware/authMiddleware');
+const { requireManagerOrAbove } = require('../middleware/roleMiddleware');
 
 // --- Public route (anyone can send a message) ---
 router.post('/contact', handleContact);
 
-// --- Protected route (only logged-in users/admins can view) ---
-router.get('/fetch-contacts', authMiddleware, getAllContacts);
+// --- Protected route (Manager and above can view contacts) ---
+router.get('/fetch-contacts', requireManagerOrAbove(), getAllContacts);
 
 module.exports = router;

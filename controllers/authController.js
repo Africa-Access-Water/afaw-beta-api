@@ -109,4 +109,86 @@ const getProfile = async (req, res) => {
   }
 };
 
-module.exports = { signup, login, getProfile };
+// GET PENDING USERS (admin only)
+const getPendingUsers = async (req, res) => {
+  try {
+    const pendingUsers = await UserModel.findPendingUsers();
+    res.json({ 
+      message: "Pending users fetched successfully",
+      users: pendingUsers 
+    });
+  } catch (err) {
+    console.error("Get pending users error:", err);
+    res.status(500).json({ error: "Failed to fetch pending users" });
+  }
+};
+
+// APPROVE USER (admin only)
+const approveUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Check if user exists and is pending
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    if (user.status !== "pending") {
+      return res.status(400).json({ error: "User is not in pending status" });
+    }
+
+    // Update user status to accepted
+    const [updatedUser] = await UserModel.updateUserStatus(userId, "accepted");
+    
+    res.json({ 
+      message: "User approved successfully",
+      user: {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        status: updatedUser.status
+      }
+    });
+  } catch (err) {
+    console.error("Approve user error:", err);
+    res.status(500).json({ error: "Failed to approve user" });
+  }
+};
+
+// REJECT USER (admin only)
+const rejectUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Check if user exists and is pending
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    if (user.status !== "pending") {
+      return res.status(400).json({ error: "User is not in pending status" });
+    }
+
+    // Update user status to rejected
+    const [updatedUser] = await UserModel.updateUserStatus(userId, "rejected");
+    
+    res.json({ 
+      message: "User rejected successfully",
+      user: {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        status: updatedUser.status
+      }
+    });
+  } catch (err) {
+    console.error("Reject user error:", err);
+    res.status(500).json({ error: "Failed to reject user" });
+  }
+};
+
+module.exports = { signup, login, getProfile, getPendingUsers, approveUser, rejectUser };

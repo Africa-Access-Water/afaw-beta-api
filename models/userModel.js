@@ -11,6 +11,17 @@ const UserModel = {
 
   async findById(id) {
     return await knex("users").where({ id }).first();
+  },
+
+  async findPendingUsers() {
+    return await knex("users").where({ status: "pending" }).select("*");
+  },
+
+  async updateUserStatus(id, status) {
+    return await knex("users")
+      .where({ id })
+      .update({ status })
+      .returning("*");
   }
 };
 

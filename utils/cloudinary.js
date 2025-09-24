@@ -47,10 +47,21 @@ const teamMediaStorage = new CloudinaryStorage({
   },
 });
 
+// Project media storage
+const projectMediaStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "projects",
+    allowed_formats: ["jpg", "jpeg", "png", "webp", "gif", "mp4", "webm"],
+    public_id: (req, file) => Date.now() + "-" + file.originalname.replace(/\s+/g, "_"),
+  },
+});
+
 
 module.exports = {
   cloudinary,
   blogMediaStorage,
   postMediaStorage,
   teamMediaStorage,
+  projectMediaStorage
 };

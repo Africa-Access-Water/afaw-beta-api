@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>All Donors</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+  <div class="container py-5">
+    <h2 class="mb-4 text-primary">Donors</h2>
+
+    <table class="table table-bordered table-striped shadow-sm">
+      <thead class="table-dark">
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Stripe Customer ID</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody id="donorsTable">
+        <tr>
+          <td colspan="5" class="text-center">Loading...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    async function fetchDonors() {
+      try {
+        const res = await fetch("http://localhost:5000/api/donations/donors");
+        const donors = await res.json();
+
+        const table = document.getElementById("donorsTable");
+        table.innerHTML = "";
+
+        if (!donors.length) {
+          table.innerHTML = `<tr><td colspan="5" class="text-center">No donors found</td></tr>`;
+          return;
+        }
+
+        donors.forEach(d => {
+          const row = `
+            <tr>
+              <td>${d.id}</td>
+              <td>${d.name}</td>
+              <td>${d.email}</td>
+              <td>${d.stripe_customer_id || "-"}</td>
+              <td>${new Date(d.created_at).toLocaleString()}</td>
+            </tr>
+          `;
+          table.innerHTML += row;
+        });
+      } catch (err) {
+        console.error("Error fetching donors:", err);
+      }
+    }
+
+    fetchDonors();
+  </script>
+</body>
+</html>

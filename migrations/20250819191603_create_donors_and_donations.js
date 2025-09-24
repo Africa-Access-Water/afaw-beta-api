@@ -24,7 +24,7 @@ exports.up = async function (knex) {
       .onDelete('CASCADE');
     table.decimal('amount', 10, 2).notNullable();
     table.string('currency').defaultTo('usd');
-    table.string('status').defaultTo('pending'); // pending, completed, active, etc.
+    table.string('status').defaultTo('initiated'); // pending, completed, active, etc.
     table.string('interval'); // day, week, month, year (for recurring)
     table.string('stripe_checkout_session_id');
     table.string('stripe_subscription_id');

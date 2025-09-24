@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>All Donations</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+  <div class="container py-5">
+    <h2 class="mb-4 text-primary">Donations</h2>
+
+    <table class="table table-bordered table-striped shadow-sm">
+      <thead class="table-dark">
+        <tr>
+          <th>ID</th>
+          <th>Donor ID</th>
+          <th>Project ID</th>
+          <th>Amount</th>
+          <th>Currency</th>
+          <th>Status</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody id="donationsTable">
+        <tr>
+          <td colspan="7" class="text-center">Loading...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    async function fetchDonations() {
+      try {
+        const res = await fetch("http://localhost:5000/api/donations");
+        const donations = await res.json();
+
+        const table = document.getElementById("donationsTable");
+        table.innerHTML = "";
+
+        if (!donations.length) {
+          table.innerHTML = `<tr><td colspan="7" class="text-center">No donations found</td></tr>`;
+          return;
+        }
+
+        donations.forEach(d => {
+          const row = `
+            <tr>
+              <td>${d.id}</td>
+              <td>${d.donor_id}</td>
+              <td>${d.project_id || "-"}</td>
+              <td>${d.amount}</td>
+              <td>${d.currency}</td>
+              <td><span class="badge bg-${d.status === "completed" ? "success" : "warning"}">${d.status}</span></td>
+              <td>${new Date(d.created_at).toLocaleString()}</td>
+            </tr>
+          `;
+          table.innerHTML += row;
+        });
+      } catch (err) {
+        console.error("Error fetching donations:", err);
+      }
+    }
+
+    fetchDonations();
+  </script>
+</body>
+</html>

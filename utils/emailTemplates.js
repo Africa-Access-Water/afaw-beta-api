@@ -79,8 +79,81 @@ function adminContactNotificationEmail(name, email, message) {
 
 
 
+function donorDonationConfirmationEmail(name, amount, currency, projectName) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8" /></head>
+    <body style="font-family: Arial, sans-serif; background:#f9f9f9; margin:0; padding:0;">
+      <table align="center" width="600" cellpadding="0" cellspacing="0" 
+             style="background:#ffffff; padding: 20px; border-radius: 8px;">
+        <tr>
+          <td align="center" style="padding-bottom: 20px;">
+            <img src="https://africaaccesswater.org/assets/img/afaw-logo-africa.png" 
+                 alt="Africa Access Water Logo" width="150" />
+          </td>
+        </tr>
+        <tr>
+          <td style="color:#333; font-size:16px; line-height:1.6;">
+            <p>Dear <strong>${name}</strong>,</p>
+            <p>Thank you for your generous donation of 
+              <strong>${amount} ${currency}</strong> 
+              towards <strong>${projectName}</strong>.</p>
+            <p>Your contribution is directly helping communities gain access to 
+              clean and sustainable water.</p>
+            <p>We’re truly grateful for your support ❤️.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-top:30px; border-top:1px solid #ddd; color:#666; font-size:14px;">
+            <p>Africa Access Water Team</p>
+            <p><a href="https://africaaccesswater.org" style="color:#3498db;">africaaccesswater.org</a></p>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+}
+
+function adminDonationNotificationEmail(name, email, amount, currency, projectName) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8" /></head>
+    <body style="font-family: Arial, sans-serif; background:#f9f9f9; margin:0; padding:0;">
+      <table align="center" width="600" cellpadding="0" cellspacing="0" 
+             style="background:#ffffff; padding: 20px; border-radius: 8px;">
+        <tr>
+          <td align="center" style="padding-bottom: 20px;">
+            <img src="https://africaaccesswater.org/assets/img/afaw-logo-africa.png" 
+                 alt="Africa Access Water Logo" width="150" />
+          </td>
+        </tr>
+        <tr>
+          <td style="color:#333; font-size:16px; line-height:1.6;">
+            <p><strong>New Donation Received</strong></p>
+            <p><strong>Name:</strong> ${name}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Amount:</strong> ${amount} ${currency}</p>
+            <p><strong>Project:</strong> ${projectName}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-top:30px; border-top:1px solid #ddd; color:#666; font-size:14px;">
+            <p>This is an automated system notification.</p>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+}
 
 module.exports = {
   userContactConfirmationEmail,
   adminContactNotificationEmail,
+  donorDonationConfirmationEmail,
+  adminDonationNotificationEmail,
 };
+

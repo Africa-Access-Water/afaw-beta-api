@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const bodyParser = require('body-parser');
+const { sendMail } = require("./services/mailService");
+
 
 // Routes
 const contactRoutes = require('./routes/contactRoutes');
@@ -19,6 +21,23 @@ const PORT = process.env.PORT || 3001;
 
 // Enable CORS
 app.use(cors());
+
+app.get("/test-email", async (req, res) => {
+  try {
+    await sendMail({
+      from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
+      to: "katongobupe444@gmail.com",
+      subject: "Test Email",
+      html: "<h1>Hello</h1><p>This is a test.</p>"
+    });
+    res.send("Email sent!");
+  } catch (err) {
+    console.error("Email test error:", err);
+    res.status(500).send(err.message);
+  }
+});
+
+// stripe listen --forward-to localhost:5000/api/donations/stripe/webhook
 
 // ⚠️ Webhook must use raw body BEFORE bodyParser.json()
 app.post(

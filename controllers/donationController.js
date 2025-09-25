@@ -70,8 +70,8 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
             quantity: 1,
           },
         ],
-        success_url: `${process.env.CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.CLIENT_URL}/failed`,
+        success_url: `${process.env.CLIENT_URL}/donation/success?session_id={CHECKOUT_SESSION_ID}&project_id=${project_id}`,
+        cancel_url: `${process.env.CLIENT_URL}/donation/failure`,
       });
 
       // 5. Update record with checkout_session_id

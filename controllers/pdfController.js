@@ -5,7 +5,7 @@ const organization = {
     name: "AFRICA ACCESS WATER",
     address: "Lot 5676/M/6, Lusaka West, Lusaka, Zambia",
     email: "info@africaaccesswater.org",
-    phone: "+260 211 231 174 | +260 976 944 695",
+    phone: "+260 211 231 174",
     website: "www.africaaccesswater.org",
     regNumber: "Non-profit Organization, Company No. 120190001569",
 };

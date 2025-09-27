@@ -277,11 +277,19 @@ exports.stripeWebhookHandler = async (req, res) => {
  */
 exports.getDonations = async (req, res) => {
   try {
+    const { donor_id } = req.query;
+    
     // Fetch one-time donations
-    const donations = await Donation.findAll();
-
+    let donations = await Donation.findAll();
+    
     // Fetch recurring subscriptions
-    const subscriptions = await Subscription.findAll();
+    let subscriptions = await Subscription.findAll();
+
+    // Filter by donor_id if provided
+    if (donor_id) {
+      donations = donations.filter(d => d.donor_id == donor_id);
+      subscriptions = subscriptions.filter(s => s.donor_id == donor_id);
+    }
 
     // Combine them, optionally add a type field
     const allDonations = [

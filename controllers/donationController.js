@@ -362,8 +362,47 @@ exports.stripeWebhookHandler = async (req, res) => {
         const attemptCount = invoice.attempt_count || 1;
         const isRetry = attemptCount > 1;
         
-        // Send notification email to donor about failed payment
-        if (subscription.donor_email) {
+        // Auto-cancel subscription after 5 failed attempts
+        if (attemptCount >= 5) {
+          console.log(`🚫 Auto-canceling subscription after ${attemptCount} failed attempts`);
+          await stripe.subscriptions.cancel(invoice.subscription);
+          await Subscription.updateById(subscription.id, { status: "canceled" });
+          
+          // Send cancellation notification email
+          if (subscription.donor_email) {
+            console.log(`📧 Sending subscription cancellation notification to: ${subscription.donor_email}`);
+            
+            const cancellationEmailOptions = {
+              from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
+              to: subscription.donor_email,
+              subject: "Subscription Cancelled - Payment Failed",
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #e74c3c;">Subscription Cancelled</h2>
+                  <p>Dear ${subscription.donor_name || 'Valued Donor'},</p>
+                  <p>We're writing to inform you that your recurring donation subscription has been cancelled due to repeated payment failures.</p>
+                  <p><strong>What happened?</strong></p>
+                  <p>After 5 failed attempts to process your payment of <strong>${invoice.currency.toUpperCase()} ${(invoice.amount_due / 100).toFixed(2)}</strong>, we've automatically cancelled your subscription to prevent further failed charges.</p>
+                  <p><strong>What you can do:</strong></p>
+                  <ul>
+                    <li>Update your payment method and create a new subscription</li>
+                    <li>Contact us if you believe this was an error</li>
+                    <li>Make a one-time donation instead</li>
+                  </ul>
+                  <p>We truly appreciate your support and hope you'll consider resubscribing once your payment method is updated.</p>
+                  <p>Thank you for your understanding!</p>
+                  <p>Best regards,<br>Africa Access Water Team</p>
+                </div>
+              `
+            };
+            
+            await sendMail(cancellationEmailOptions);
+            console.log(`✅ Subscription cancellation notification sent to ${subscription.donor_email}`);
+          }
+        }
+        
+        // Send notification email to donor about failed payment (only if not cancelled)
+        if (subscription.donor_email && attemptCount < 5) {
           console.log(`📧 Sending payment failure notification to: ${subscription.donor_email} (attempt ${attemptCount})`);
           
           const subject = isRetry 

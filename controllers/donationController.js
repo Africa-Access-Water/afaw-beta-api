@@ -343,6 +343,73 @@ exports.stripeWebhookHandler = async (req, res) => {
         break;
       }
 
+      case "invoice.payment_failed": {
+        const invoice = event.data.object;
+        console.log(`❌ Recurring payment failed for subscription: ${invoice.subscription}`);
+        
+        // Find the subscription in our database
+        const subscription = await Subscription.findByStripeId(invoice.subscription);
+        if (!subscription) {
+          console.error(`❌ Subscription not found: ${invoice.subscription}`);
+          break;
+        }
+        
+        // Update subscription status to past_due
+        await Subscription.updateById(subscription.id, { status: "past_due" });
+        console.log(`⚠️ Updated subscription ${subscription.id} status to past_due`);
+        
+        // Check if this is a retry attempt or first failure
+        const attemptCount = invoice.attempt_count || 1;
+        const isRetry = attemptCount > 1;
+        
+        // Send notification email to donor about failed payment
+        if (subscription.donor_email) {
+          console.log(`📧 Sending payment failure notification to: ${subscription.donor_email} (attempt ${attemptCount})`);
+          
+          const subject = isRetry 
+            ? `Payment Still Failed - Attempt ${attemptCount}`
+            : "Payment Failed - Action Required";
+          
+          const retryInfo = isRetry 
+            ? `<p><strong>This was attempt #${attemptCount}</strong> - Stripe will continue retrying automatically.</p>`
+            : `<p>Stripe will automatically retry this payment in a few days.</p>`;
+          
+          const emailOptions = {
+            from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
+            to: subscription.donor_email,
+            subject: subject,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #e74c3c;">Payment Failed</h2>
+                <p>Dear ${subscription.donor_name || 'Valued Donor'},</p>
+                <p>We encountered an issue processing your recurring donation of <strong>${invoice.currency.toUpperCase()} ${(invoice.amount_due / 100).toFixed(2)}</strong>.</p>
+                ${retryInfo}
+                <p><strong>What happened?</strong></p>
+                <ul>
+                  <li>Your payment method may have expired</li>
+                  <li>Insufficient funds in your account</li>
+                  <li>Your bank may have declined the transaction</li>
+                </ul>
+                <p><strong>What you can do:</strong></p>
+                <ul>
+                  <li>Update your payment method in your account</li>
+                  <li>Ensure sufficient funds are available</li>
+                  <li>Contact your bank if the issue persists</li>
+                </ul>
+                <p>If you continue to experience issues, please contact us.</p>
+                <p>Thank you for your continued support!</p>
+                <p>Best regards,<br>Africa Access Water Team</p>
+              </div>
+            `
+          };
+          
+          await sendMail(emailOptions);
+          console.log(`✅ Payment failure notification sent to ${subscription.donor_email}`);
+        }
+        
+        break;
+      }
+
       default:
         console.log(`Unhandled event type ${event.type}`);
     }

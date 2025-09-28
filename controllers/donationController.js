@@ -289,6 +289,60 @@ exports.stripeWebhookHandler = async (req, res) => {
         break;
       }
 
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object;
+        console.log(`🔄 Recurring payment succeeded for subscription: ${invoice.subscription}`);
+        
+        // Find the subscription in our database
+        const subscription = await Subscription.findByStripeId(invoice.subscription);
+        if (!subscription) {
+          console.error(`❌ Subscription not found: ${invoice.subscription}`);
+          break;
+        }
+        
+        // Create a new donation record for this recurring payment
+        const donationData = {
+          donor_id: subscription.donor_id,
+          amount: (invoice.amount_paid / 100).toFixed(2),
+          currency: invoice.currency,
+          status: "completed",
+          interval: subscription.interval,
+          stripe_payment_intent: invoice.payment_intent,
+          stripe_subscription_id: invoice.subscription,
+          project_id: subscription.project_id
+        };
+        
+        const donationId = await Donation.create(donationData);
+        console.log(`✅ Created donation record ${donationId} for recurring payment`);
+        
+        // Update project totals
+        if (subscription.project_id) {
+          await Project.addDonation(subscription.project_id, parseFloat(donationData.amount));
+          console.log(`📊 Updated project ${subscription.project_id} with donation ${donationData.amount}`);
+        }
+        
+        // Reuse existing email functionality by creating a mock session object
+        const mockSession = {
+          id: `recurring-${donationId}`,
+          customer_details: {
+            email: subscription.donor_email,
+            name: subscription.donor_name
+          },
+          amount_total: invoice.amount_paid,
+          currency: invoice.currency,
+          payment_intent: invoice.payment_intent,
+          metadata: {
+            projectId: subscription.project_id
+          }
+        };
+        
+        // Reuse the existing handleDonationSuccess function
+        await handleDonationSuccess(mockSession);
+        console.log(`✅ Recurring payment processed successfully`);
+        
+        break;
+      }
+
       default:
         console.log(`Unhandled event type ${event.type}`);
     }

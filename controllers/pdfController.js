@@ -14,6 +14,22 @@ const generateDonationReceipt = async (req, res) => {
     try {
         const donation = req.body;
 
+        const pdfBuffer = await generateDonationReceiptPDFBuffer(donation);
+
+        // Send PDF as download
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=Receipt-${donation.id}.pdf`);
+        res.send(pdfBuffer);
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to generate receipt PDF' });
+    }
+};
+
+// Generate PDF buffer for email attachment (no HTTP response)
+const generateDonationReceiptPDFBuffer = async (donation) => {
+    try {
         // Generate HTML string
         const html = generateDonationReceiptHTML(donation, organization, new Date().toLocaleDateString());
 
@@ -33,17 +49,14 @@ const generateDonationReceipt = async (req, res) => {
 
         await browser.close();
 
-        // Send PDF as download
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=Receipt-${donation.id}.pdf`);
-        res.send(pdfBuffer);
-
+        return pdfBuffer;
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Failed to generate receipt PDF' });
+        console.error('Failed to generate receipt PDF buffer:', err);
+        throw err;
     }
 };
 
 module.exports = {
-    generateDonationReceipt
+    generateDonationReceipt,
+    generateDonationReceiptPDFBuffer
 };

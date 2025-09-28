@@ -9,6 +9,7 @@ const {
   donorDonationConfirmationEmail,
   adminDonationNotificationEmail,
 } = require("../utils/emailTemplates");
+const { generateDonationReceiptPDFBuffer } = require("./pdfController");
 
 
 const knex = require("../config/db");
@@ -47,27 +48,64 @@ async function handleDonationSuccess(session) {
       console.log("📌 Project updated:", project);
     }
 
-    // ✅ Send confirmation email to donor
-    if (donorEmail) {
-      console.log(`📧 Sending confirmation email to donor: ${donorEmail}`);
-      const project = projectId
-        ? await knex("projects").where({ id: projectId }).first()
-        : null;
+     // ✅ Send confirmation email to donor
+     if (donorEmail) {
+       console.log(`📧 Sending confirmation email to donor: ${donorEmail}`);
+       const project = projectId
+         ? await knex("projects").where({ id: projectId }).first()
+         : null;
 
-      await sendMail({
-        from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
-        to: donorEmail,
-        subject: `Thank you for your donation of ${currency} ${amount}`,
-        html: donorDonationConfirmationEmail(
-          donorName,
-          amount,
-          currency,
-          project ? project.name : "our mission"
-        ),
-      });
-    } else {
-      console.warn("⚠️ No donor email found in session");
-    }
+       // Prepare donation data for PDF generation
+       const donationData = {
+         id: session.id,
+         name: donorName,
+         email: donorEmail,
+         amount: parseFloat(amount),
+         method: "Credit Card (Stripe)",
+         transaction_id: session.payment_intent,
+         created_at: new Date().toISOString(),
+         message: project ? `Donation for ${project.name}` : "General donation"
+       };
+
+       // Try to generate PDF receipt
+       let pdfBuffer = null;
+       try {
+         pdfBuffer = await generateDonationReceiptPDFBuffer(donationData);
+         console.log("✅ PDF receipt generated successfully");
+       } catch (pdfError) {
+         console.error("Failed to generate PDF receipt:", pdfError);
+         // Continue without PDF attachment
+       }
+
+       // Send email with or without PDF attachment
+       const emailOptions = {
+         from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
+         to: donorEmail,
+         subject: 
+           `Thank you for your donation of ${currency} ${amount}`,
+         html: donorDonationConfirmationEmail(
+           donorName,
+           amount,
+           currency,
+           project ? project.name : "our mission"
+         )
+       };
+
+       // Add PDF attachment only if successfully generated
+       if (pdfBuffer) {
+         emailOptions.attachments = [
+           {
+             filename: `Donation-Receipt-${donationData.id}.pdf`,
+             content: pdfBuffer,
+             contentType: 'application/pdf'
+           }
+         ];
+       }
+
+       await sendMail(emailOptions);
+     } else {
+       console.warn("⚠️ No donor email found in session");
+     }
 
     // ✅ Notify admin(s)
     console.log("📧 Sending admin notification to:", process.env.ADMIN_EMAILS);
@@ -100,7 +138,7 @@ exports.createCheckoutSession = async (req, res) => {
     const { name, email, project_id, amount, currency, interval, recurring } =
       req.body;
 
-    // 1. Check or create donor
+    // Check or create donor
     let donor = await Donor.findByEmail(email);
     let donorId;
 
@@ -111,7 +149,7 @@ exports.createCheckoutSession = async (req, res) => {
       donorId = donor.id;
     }
 
-    // 2. Ensure Stripe customer exists
+    // Ensure Stripe customer exists
     let customer;
     if (!donor.stripe_customer_id) {
       customer = await stripe.customers.create({
@@ -124,28 +162,7 @@ exports.createCheckoutSession = async (req, res) => {
 
     await Donor.updateStripeCustomerId(donorId, customer.id);
 
-    // 3. Save donation/subscription first (status = 'initiated')
-    let donationId;
-    if (recurring) {
-      donationId = await Subscription.create({
-        donor_id: donorId,
-        project_id,
-        amount,
-        currency,
-        interval,
-        status: "initiated",
-      });
-    } else {
-      donationId = await Donation.create({
-        donor_id: donorId,
-        project_id,
-        amount,
-        currency,
-        status: "initiated",
-      });
-    }
-
-    // 4. Create Stripe checkout session
+    // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customer.id,
       payment_method_types: ["card"],
@@ -172,20 +189,31 @@ exports.createCheckoutSession = async (req, res) => {
       cancel_url: `${process.env.CLIENT_URL}/donation/failure`,
     });
 
-    // 5. Update record with checkout_session_id
+    // Save donation/subscription first (status = 'initiated')
+    let donationId;
+
     if (recurring) {
-      await Subscription.updateById(donationId, {
-        stripe_checkout_session_id: session.id,
-        status: "pending",
+      donationId = await Subscription.create({
+        donor_id: donorId,
+        project_id,
+        amount,
+        currency,
+        interval,
+        status: "initiated",
+        stripe_checkout_session_id: session.id
       });
     } else {
-      await Donation.updateById(donationId, {
-        stripe_checkout_session_id: session.id,
-        status: "pending",
+      donationId = await Donation.create({
+        donor_id: donorId,
+        project_id,
+        amount,
+        currency,
+        status: "initiated",
+        stripe_checkout_session_id: session.id
       });
     }
 
-    // 6. Redirect
+    // Redirect
     return res.json({ url: session.url });
   } catch (err) {
     console.error("Checkout session error:", err);

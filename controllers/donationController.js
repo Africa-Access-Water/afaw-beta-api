@@ -18,6 +18,7 @@ async function handleDonationSuccess(session) {
   try {
     const donorEmail = session.customer_details?.email;
     const donorName = session.customer_details?.name || "Donor";
+    const donationId = session.metadata?.donationId;
     const amount = (session.amount_total / 100).toFixed(2);
     const currency = session.currency.toUpperCase();
     const projectId = session.metadata?.projectId;
@@ -37,14 +38,14 @@ async function handleDonationSuccess(session) {
       stripe_payment_intent: session.payment_intent,
     });
 
-
+    let project;
     if (projectId) {
       await knex("projects")
         .where({ id: projectId })
         .increment("donation_raised", amount);
 
       // Fetch project details for logging
-      const project = await knex("projects").where({ id: projectId }).first();
+      project = await knex("projects").where({ id: projectId }).first();
       console.log("📌 Project updated:", project);
     }
 
@@ -57,11 +58,11 @@ async function handleDonationSuccess(session) {
 
        // Prepare donation data for PDF generation
        const donationData = {
-         id: session.id,
+         id: donationId,
          name: donorName,
          email: donorEmail,
          amount: parseFloat(amount),
-         method: "Credit Card (Stripe)",
+         method: "stripe",
          transaction_id: session.payment_intent,
          created_at: new Date().toISOString(),
          message: project ? `Donation for ${project.name}` : "General donation"
@@ -107,8 +108,9 @@ async function handleDonationSuccess(session) {
        console.warn("⚠️ No donor email found in session");
      }
 
-    // ✅ Notify admin(s)
+    // // ✅ Notify admin(s)
     console.log("📧 Sending admin notification to:", process.env.ADMIN_EMAILS);
+    projectName = project ? project.name : "our mission";
     await sendMail({
       from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
       to: process.env.ADMIN_EMAILS, // comma-separated list in .env
@@ -118,7 +120,7 @@ async function handleDonationSuccess(session) {
         donorEmail,
         amount,
         currency,
-        projectId
+        projectName
       ),
     });
 
@@ -162,6 +164,28 @@ exports.createCheckoutSession = async (req, res) => {
 
     await Donor.updateStripeCustomerId(donorId, customer.id);
 
+    // Save donation/subscription first (status = 'initiated')
+    let donationId;
+
+    if (recurring) {
+      donationId = await Subscription.create({
+        donor_id: donorId,
+        project_id,
+        amount,
+        currency,
+        interval,
+        status: "initiated",
+      });
+    } else {
+      donationId = await Donation.create({
+        donor_id: donorId,
+        project_id,
+        amount,
+        currency,
+        status: "initiated",
+      });
+    }
+
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customer.id,
@@ -180,39 +204,32 @@ exports.createCheckoutSession = async (req, res) => {
           quantity: 1,
         },
       ],
-
+      payment_intent_data: {
+        metadata: {
+          donationId,
+          projectId: project_id,
+          donorId
+        },
+      },
       metadata: {
         projectId: project_id,
+        donationId: donationId,
         donorId: donorId
       },
       success_url: `${process.env.CLIENT_URL}/donation/success?session_id={CHECKOUT_SESSION_ID}&project_id=${project_id}`,
       cancel_url: `${process.env.CLIENT_URL}/donation/failure`,
     });
 
-    // Save donation/subscription first (status = 'initiated')
-    let donationId;
-
-    if (recurring) {
-      donationId = await Subscription.create({
-        donor_id: donorId,
-        project_id,
-        amount,
-        currency,
-        interval,
-        status: "initiated",
-        stripe_checkout_session_id: session.id
+     // Update record with checkout_session_id
+     if (recurring) {
+      await Subscription.updateById(donationId, {
+        stripe_checkout_session_id: session.id,
       });
     } else {
-      donationId = await Donation.create({
-        donor_id: donorId,
-        project_id,
-        amount,
-        currency,
-        status: "initiated",
-        stripe_checkout_session_id: session.id
+      await Donation.updateById(donationId, {
+        stripe_checkout_session_id: session.id,
       });
     }
-
     // Redirect
     return res.json({ url: session.url });
   } catch (err) {
@@ -236,7 +253,7 @@ exports.createSubscription = async (req, res) => {
 exports.stripeWebhookHandler = async (req, res) => {
   const sig = req.headers["stripe-signature"];
   let event;
-
+  
   try {
     event = stripe.webhooks.constructEvent(
       req.body,
@@ -277,14 +294,16 @@ exports.stripeWebhookHandler = async (req, res) => {
         const session = event.data.object;
         await Donation.updateBySessionId(session.id, { status: "expired" });
         await Subscription.updateBySessionId(session.id, { status: "expired" });
+        console.log(`⏰ Session ${session.id} expired automatically`);
         break;
       }
 
       case "payment_intent.payment_failed": {
         const intent = event.data.object;
-        const sessionId = intent.metadata.checkout_session_id;
-        if (sessionId) {
-          await Donation.updateBySessionId(sessionId, { status: "failed" });
+        const donationId = intent.metadata.donationId;
+        console.log(`🔄 Payment intent failed for donation: ${JSON.stringify(intent, null, 2)}`);
+        if (donationId) {
+          await Donation.updateById(donationId, { status: "failed" });
         }
         break;
       }
@@ -526,3 +545,4 @@ exports.getProjectWithDonations = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+

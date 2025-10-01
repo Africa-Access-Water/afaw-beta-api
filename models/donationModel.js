@@ -7,9 +7,9 @@ class Donation {
     const id = typeof row === 'object' ? row.id : row;
 
     // Update project donation_raised
-    if (data.project_id && data.amount) {
-      await Project.addDonation(data.project_id, data.amount);
-    }
+    // if (data.project_id && data.amount) {
+    //   await Project.addDonation(data.project_id, data.amount);
+    // }
 
     return id;
   }

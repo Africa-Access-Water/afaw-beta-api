@@ -2,28 +2,35 @@ const knex = require('../config/db');
 
 class Project {
   static async create(data) {
+    if (data.media && Array.isArray(data.media)) {
+      data.media = JSON.stringify(data.media);
+    }
     const [id] = await knex('projects').insert(data).returning('id');
     return id;
   }
 
   static async findAll() {
-    return knex('projects').orderBy('created_at', 'desc');
+    const projects = await knex('projects').orderBy('created_at', 'desc');
+    return projects.map(this._parseProject);
   }
 
   static async findById(id) {
-    return knex('projects').where({ id }).first();
+    const project = await knex('projects').where({ id }).first();
+    return project ? this._parseProject(project) : null;
   }
 
   static async update(id, data) {
+    if (data.media && Array.isArray(data.media)) {
+      data.media = JSON.stringify(data.media);
+    }
     await knex('projects').where({ id }).update(data);
-    return this.findById(id);
+    return this.findById(id); // auto-parsed on return
   }
 
   static async delete(id) {
     return knex('projects').where({ id }).del();
   }
 
-  // New: increment donation_raised
   static async addDonation(id, amount) {
     await knex('projects')
       .where({ id })
@@ -31,7 +38,6 @@ class Project {
     return this.findById(id);
   }
 
-   // ✅ Fetch project + donations
   static async findWithDonations(id) {
     const project = await this.findById(id);
     if (!project) return null;
@@ -46,8 +52,17 @@ class Project {
     };
   }
 
-
-
+  // Helper to parse JSON fields consistently
+  static _parseProject(project) {
+    if (project.media && typeof project.media === 'string') {
+      try {
+        project.media = JSON.parse(project.media);
+      } catch {
+        project.media = [];
+      }
+    }
+    return project;
+  }
 }
 
 module.exports = Project;

@@ -9,6 +9,7 @@ router.post(
   upload.fields([
     { name: 'cover_image', maxCount: 1 },
     { name: 'media', maxCount: 10 },
+    { name: 'pdf_document', maxCount: 1 }, // add pdf support
   ]),
   ProjectController.create
 );
@@ -21,6 +22,7 @@ router.put(
   upload.fields([
     { name: 'cover_image', maxCount: 1 },
     { name: 'media', maxCount: 10 },
+    { name: 'pdf_document', maxCount: 1 }, // add pdf support
   ]),
   ProjectController.update
 );

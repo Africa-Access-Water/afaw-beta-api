@@ -1,5 +1,7 @@
 const cloudinary = require("cloudinary").v2;
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const multer = require("multer");
+require("dotenv").config();
 
 // Configure Cloudinary
 cloudinary.config({
@@ -10,14 +12,13 @@ cloudinary.config({
 
 cloudinary.api
   .usage()
-  .then(res => {
+  .then((res) => {
     console.log("✅ Cloudinary connection successful!");
     console.log("📦 Cloudinary usage:", res);
   })
-  .catch(err => {
+  .catch((err) => {
     console.error("❌ Cloudinary connection failed:", err.message);
   });
-
 
 // Configure storage
 const blogMediaStorage = new CloudinaryStorage({
@@ -27,7 +28,6 @@ const blogMediaStorage = new CloudinaryStorage({
     allowed_formats: ["jpg", "jpeg", "png", "webp"],
   },
 });
-
 
 const postMediaStorage = new CloudinaryStorage({
   cloudinary,
@@ -47,21 +47,47 @@ const teamMediaStorage = new CloudinaryStorage({
   },
 });
 
-// Project media storage
+// Helper to sanitize filenames
+const sanitizeFilename = (filename) =>
+  filename
+    .replace(/[^a-zA-Z0-9-_ ]/g, "") // remove special characters
+    .replace(/\s+/g, "_"); // replace spaces with underscores
+
+// Storage for project files
 const projectMediaStorage = new CloudinaryStorage({
   cloudinary,
-  params: {
-    folder: "projects",
-    allowed_formats: ["jpg", "jpeg", "png", "webp", "gif", "mp4", "webm"],
-    public_id: (req, file) => Date.now() + "-" + file.originalname.replace(/\s+/g, "_"),
+  params: async (req, file) => {
+    if (file.fieldname === "pdf_document") {
+      return {
+        folder: "projects/pdf",
+        resource_type: "raw",
+        public_id:
+          sanitizeFilename(file.originalname.replace(/\.pdf$/i, "")) + ".pdf",
+      };
+    } else if (file.fieldname === "cover_image") {
+      return {
+        folder: "projects/cover",
+        resource_type: "image",
+        public_id: Date.now() + "-" + sanitizeFilename(file.originalname),
+      };
+    } else {
+      // media (images/videos)
+      return {
+        folder: "projects/media",
+        resource_type: "auto",
+        public_id: Date.now() + "-" + sanitizeFilename(file.originalname),
+      };
+    }
   },
 });
 
+const upload = multer({ storage: projectMediaStorage });
 
 module.exports = {
   cloudinary,
   blogMediaStorage,
   postMediaStorage,
   teamMediaStorage,
-  projectMediaStorage
+  projectMediaStorage,
+  upload,
 };

@@ -1,5 +1,6 @@
 require("dotenv").config();
 const { sendMail } = require("../services/mailService");
+const config = require('../config/config');
 const {
   adminContactNotificationEmail,
   userContactConfirmationEmail,
@@ -31,15 +32,15 @@ const handleContact = async (req, res) => {
 
     // Send admin email
     await sendMail({
-      from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
-      to: process.env.EMAIL_USER,
+      from: `"Africa Access Water" <${config.email.user}>`,
+      to: config.email.user,
       subject: `Website Contact Submission : ${name}`,
       html: adminContactNotificationEmail(name, email, message),
     });
 
     // Send confirmation to user
     await sendMail({
-      from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
+      from: `"Africa Access Water" <${config.email.user}>`,
       to: email,
       subject: `Hello ${name}, Thank you for contacting us`,
       html: userContactConfirmationEmail(name),

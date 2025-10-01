@@ -3,7 +3,8 @@ const Donor = require("../models/donorModel");
 const Donation = require("../models/donationModel");
 const Subscription = require("../models/subscriptionModel");
 const Project = require("../models/projectModel");
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const config = require('../config/config');
+const stripe = require("stripe")(config.stripe.secretKey);
 const { sendMail } = require("../services/mailService");
 const {
   donorDonationConfirmationEmail,
@@ -109,11 +110,11 @@ async function handleDonationSuccess(session) {
      }
 
     // // ✅ Notify admin(s)
-    console.log("📧 Sending admin notification to:", process.env.ADMIN_EMAILS);
+    console.log("📧 Sending admin notification to:", config.adminEmails);
     projectName = project ? project.name : "our mission";
     await sendMail({
-      from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
-      to: process.env.ADMIN_EMAILS, // comma-separated list in .env
+      from: `"Africa Access Water" <${config.email.user}>`,
+      to: config.adminEmails, // comma-separated list in .env
       subject: `New Donation Received: ${currency} ${amount}`,
       html: adminDonationNotificationEmail(
         donorName,
@@ -216,8 +217,8 @@ exports.createCheckoutSession = async (req, res) => {
         donationId: donationId,
         donorId: donorId
       },
-      success_url: `${process.env.CLIENT_URL}/donation/success?session_id={CHECKOUT_SESSION_ID}&project_id=${project_id}`,
-      cancel_url: `${process.env.CLIENT_URL}/donation/failure`,
+      success_url: `${config.clientUrl}/donation/success?session_id={CHECKOUT_SESSION_ID}&project_id=${project_id}`,
+      cancel_url: `${config.clientUrl}/donation/failure`,
     });
 
      // Update record with checkout_session_id
@@ -258,7 +259,7 @@ exports.stripeWebhookHandler = async (req, res) => {
     event = stripe.webhooks.constructEvent(
       req.body,
       sig,
-      process.env.STRIPE_WEBHOOK_SECRET_DEV
+      config.stripe.webhookSecret
     );
   } catch (err) {
     console.error("Webhook signature error:", err);

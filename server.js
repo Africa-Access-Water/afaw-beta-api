@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const config = require('./config/config');
 const bodyParser = require('body-parser');
 const { sendMail } = require("./services/mailService");
 
@@ -17,10 +18,14 @@ const projectRoutes = require('./routes/projectRoutes');
 const donationController = require('./controllers/donationController');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = config.port;
 
-// Enable CORS
-app.use(cors());
+// Enable CORS (allow list if provided)
+if (config.corsAllowedOrigins && config.corsAllowedOrigins.length > 0) {
+  app.use(cors({ origin: config.corsAllowedOrigins }));
+} else {
+  app.use(cors());
+}
 
 app.get("/test-email", async (req, res) => {
   try {
@@ -65,4 +70,4 @@ app.use('/api/pdf', pdfRoutes);
 app.use('/api/projects', projectRoutes);
 
 // Start server
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

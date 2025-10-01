@@ -40,7 +40,7 @@ cp .env.example .env
 **Payment Processing (Stripe):**
 
 - `STRIPE_SECRET_KEY` - Your Stripe secret key
-- `STRIPE_WEBHOOK_SECRET` - Stripe webhook endpoint secret
+- `STRIPE_WEBHOOK_SECRET` - Stripe webhook endpoint secret (fallback: `STRIPE_WEBHOOK_SECRET_DEV` in non-prod)
 - `CLIENT_URL` - Frontend URL for payment redirects
 
 **Email Service:**

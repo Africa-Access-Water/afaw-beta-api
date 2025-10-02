@@ -39,6 +39,19 @@ class Subscription {
       .first();
   }
 
+  // ✅ New: find by Stripe subscription ID
+  static async findByStripeId(stripeSubscriptionId) {
+    return knex('subscriptions')
+      .leftJoin('donors', 'subscriptions.donor_id', 'donors.id')
+      .select(
+        'subscriptions.*',
+        'donors.email as donor_email',
+        'donors.name as donor_name'
+      )
+      .where({ 'subscriptions.stripe_subscription_id': stripeSubscriptionId })
+      .first();
+  }
+
   static async delete(id) {
     return knex('subscriptions').where({ id }).del();
   }

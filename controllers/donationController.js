@@ -3,12 +3,14 @@ const Donor = require("../models/donorModel");
 const Donation = require("../models/donationModel");
 const Subscription = require("../models/subscriptionModel");
 const Project = require("../models/projectModel");
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const config = require('../config/config');
+const stripe = require("stripe")(config.stripe.secretKey);
 const { sendMail } = require("../services/mailService");
 const {
   donorDonationConfirmationEmail,
   adminDonationNotificationEmail,
 } = require("../utils/emailTemplates");
+const { generateDonationReceiptPDFBuffer } = require("./pdfController");
 
 
 const knex = require("../config/db");
@@ -17,6 +19,7 @@ async function handleDonationSuccess(session) {
   try {
     const donorEmail = session.customer_details?.email;
     const donorName = session.customer_details?.name || "Donor";
+    const donationId = session.metadata?.donationId;
     const amount = (session.amount_total / 100).toFixed(2);
     const currency = session.currency.toUpperCase();
     const projectId = session.metadata?.projectId;
@@ -36,51 +39,89 @@ async function handleDonationSuccess(session) {
       stripe_payment_intent: session.payment_intent,
     });
 
-
+    let project;
     if (projectId) {
       await knex("projects")
         .where({ id: projectId })
         .increment("donation_raised", amount);
 
       // Fetch project details for logging
-      const project = await knex("projects").where({ id: projectId }).first();
+      project = await knex("projects").where({ id: projectId }).first();
       console.log("📌 Project updated:", project);
     }
 
-    // ✅ Send confirmation email to donor
-    if (donorEmail) {
-      console.log(`📧 Sending confirmation email to donor: ${donorEmail}`);
-      const project = projectId
-        ? await knex("projects").where({ id: projectId }).first()
-        : null;
+     // ✅ Send confirmation email to donor
+     if (donorEmail) {
+       console.log(`📧 Sending confirmation email to donor: ${donorEmail}`);
+       const project = projectId
+         ? await knex("projects").where({ id: projectId }).first()
+         : null;
 
-      await sendMail({
-        from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
-        to: donorEmail,
-        subject: `Thank you for your donation of ${currency} ${amount}`,
-        html: donorDonationConfirmationEmail(
-          donorName,
-          amount,
-          currency,
-          project ? project.name : "our mission"
-        ),
-      });
-    } else {
-      console.warn("⚠️ No donor email found in session");
-    }
+       // Prepare donation data for PDF generation
+       const donationData = {
+         id: donationId,
+         name: donorName,
+         email: donorEmail,
+         amount: parseFloat(amount),
+         method: "stripe",
+         transaction_id: session.payment_intent,
+         created_at: new Date().toISOString(),
+         message: project ? `Donation for ${project.name}` : "General donation"
+       };
 
-    // ✅ Notify admin(s)
-    console.log("📧 Sending admin notification to:", process.env.ADMIN_EMAILS);
+       // Try to generate PDF receipt
+       let pdfBuffer = null;
+       try {
+         pdfBuffer = await generateDonationReceiptPDFBuffer(donationData);
+         console.log("✅ PDF receipt generated successfully");
+       } catch (pdfError) {
+         console.error("Failed to generate PDF receipt:", pdfError);
+         // Continue without PDF attachment
+       }
+
+       // Send email with or without PDF attachment
+       const emailOptions = {
+         from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
+         to: donorEmail,
+         subject: 
+           `Thank you for your donation of ${currency} ${amount}`,
+         html: donorDonationConfirmationEmail(
+           donorName,
+           amount,
+           currency,
+           project ? project.name : "our mission"
+         )
+       };
+
+       // Add PDF attachment only if successfully generated
+       if (pdfBuffer) {
+         emailOptions.attachments = [
+           {
+             filename: `Donation-Receipt-${donationData.id}.pdf`,
+             content: pdfBuffer,
+             contentType: 'application/pdf'
+           }
+         ];
+       }
+
+       await sendMail(emailOptions);
+     } else {
+       console.warn("⚠️ No donor email found in session");
+     }
+
+    // // ✅ Notify admin(s)
+    console.log("📧 Sending admin notification to:", config.adminEmails);
+    projectName = project ? project.name : "our mission";
     await sendMail({
-      from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
-      to: process.env.ADMIN_EMAILS, // comma-separated list in .env
+      from: `"Africa Access Water" <${config.email.user}>`,
+      to: config.adminEmails, // comma-separated list in .env
       subject: `New Donation Received: ${currency} ${amount}`,
       html: adminDonationNotificationEmail(
         donorName,
         donorEmail,
         amount,
         currency,
-        projectId
+        projectName
       ),
     });
 
@@ -100,7 +141,7 @@ exports.createCheckoutSession = async (req, res) => {
     const { name, email, project_id, amount, currency, interval, recurring } =
       req.body;
 
-    // 1. Check or create donor
+    // Check or create donor
     let donor = await Donor.findByEmail(email);
     let donorId;
 
@@ -111,7 +152,7 @@ exports.createCheckoutSession = async (req, res) => {
       donorId = donor.id;
     }
 
-    // 2. Ensure Stripe customer exists
+    // Ensure Stripe customer exists
     let customer;
     if (!donor.stripe_customer_id) {
       customer = await stripe.customers.create({
@@ -124,8 +165,9 @@ exports.createCheckoutSession = async (req, res) => {
 
     await Donor.updateStripeCustomerId(donorId, customer.id);
 
-    // 3. Save donation/subscription first (status = 'initiated')
+    // Save donation/subscription first (status = 'initiated')
     let donationId;
+
     if (recurring) {
       donationId = await Subscription.create({
         donor_id: donorId,
@@ -145,7 +187,7 @@ exports.createCheckoutSession = async (req, res) => {
       });
     }
 
-    // 4. Create Stripe checkout session
+    // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customer.id,
       payment_method_types: ["card"],
@@ -163,29 +205,33 @@ exports.createCheckoutSession = async (req, res) => {
           quantity: 1,
         },
       ],
-
+      payment_intent_data: {
+        metadata: {
+          donationId,
+          projectId: project_id,
+          donorId
+        },
+      },
       metadata: {
         projectId: project_id,
+        donationId: donationId,
         donorId: donorId
       },
-      success_url: `${process.env.CLIENT_URL}/donation/success?session_id={CHECKOUT_SESSION_ID}&project_id=${project_id}`,
-      cancel_url: `${process.env.CLIENT_URL}/donation/failure`,
+      success_url: `${config.clientUrl}/donation/success?session_id={CHECKOUT_SESSION_ID}&project_id=${project_id}`,
+      cancel_url: `${config.clientUrl}/donation/failure`,
     });
 
-    // 5. Update record with checkout_session_id
-    if (recurring) {
+     // Update record with checkout_session_id
+     if (recurring) {
       await Subscription.updateById(donationId, {
         stripe_checkout_session_id: session.id,
-        status: "pending",
       });
     } else {
       await Donation.updateById(donationId, {
         stripe_checkout_session_id: session.id,
-        status: "pending",
       });
     }
-
-    // 6. Redirect
+    // Redirect
     return res.json({ url: session.url });
   } catch (err) {
     console.error("Checkout session error:", err);
@@ -208,12 +254,12 @@ exports.createSubscription = async (req, res) => {
 exports.stripeWebhookHandler = async (req, res) => {
   const sig = req.headers["stripe-signature"];
   let event;
-
+  
   try {
     event = stripe.webhooks.constructEvent(
       req.body,
       sig,
-      process.env.STRIPE_WEBHOOK_SECRET_DEV
+      config.stripe.webhookSecret
     );
   } catch (err) {
     console.error("Webhook signature error:", err);
@@ -249,15 +295,177 @@ exports.stripeWebhookHandler = async (req, res) => {
         const session = event.data.object;
         await Donation.updateBySessionId(session.id, { status: "expired" });
         await Subscription.updateBySessionId(session.id, { status: "expired" });
+        console.log(`⏰ Session ${session.id} expired automatically`);
         break;
       }
 
       case "payment_intent.payment_failed": {
         const intent = event.data.object;
-        const sessionId = intent.metadata.checkout_session_id;
-        if (sessionId) {
-          await Donation.updateBySessionId(sessionId, { status: "failed" });
+        const donationId = intent.metadata.donationId;
+        console.log(`🔄 Payment intent failed for donation: ${JSON.stringify(intent, null, 2)}`);
+        if (donationId) {
+          await Donation.updateById(donationId, { status: "failed" });
         }
+        break;
+      }
+
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object;
+        console.log(`🔄 Recurring payment succeeded for subscription: ${invoice.subscription}`);
+        
+        // Find the subscription in our database
+        const subscription = await Subscription.findByStripeId(invoice.subscription);
+        if (!subscription) {
+          console.error(`❌ Subscription not found: ${invoice.subscription}`);
+          break;
+        }
+        
+        // Create a new donation record for this recurring payment
+        const donationData = {
+          donor_id: subscription.donor_id,
+          amount: (invoice.amount_paid / 100).toFixed(2),
+          currency: invoice.currency,
+          status: "completed",
+          interval: subscription.interval,
+          stripe_payment_intent: invoice.payment_intent,
+          stripe_subscription_id: invoice.subscription,
+          project_id: subscription.project_id
+        };
+        
+        const donationId = await Donation.create(donationData);
+        console.log(`✅ Created donation record ${donationId} for recurring payment`);
+        
+        // Update project totals
+        if (subscription.project_id) {
+          await Project.addDonation(subscription.project_id, parseFloat(donationData.amount));
+          console.log(`📊 Updated project ${subscription.project_id} with donation ${donationData.amount}`);
+        }
+        
+        // Reuse existing email functionality by creating a mock session object
+        const mockSession = {
+          id: `recurring-${donationId}`,
+          customer_details: {
+            email: subscription.donor_email,
+            name: subscription.donor_name
+          },
+          amount_total: invoice.amount_paid,
+          currency: invoice.currency,
+          payment_intent: invoice.payment_intent,
+          metadata: {
+            projectId: subscription.project_id
+          }
+        };
+        
+        // Reuse the existing handleDonationSuccess function
+        await handleDonationSuccess(mockSession);
+        console.log(`✅ Recurring payment processed successfully`);
+        
+        break;
+      }
+
+      case "invoice.payment_failed": {
+        const invoice = event.data.object;
+        console.log(`❌ Recurring payment failed for subscription: ${invoice.subscription}`);
+        
+        // Find the subscription in our database
+        const subscription = await Subscription.findByStripeId(invoice.subscription);
+        if (!subscription) {
+          console.error(`❌ Subscription not found: ${invoice.subscription}`);
+          break;
+        }
+        
+        // Update subscription status to past_due
+        await Subscription.updateById(subscription.id, { status: "past_due" });
+        console.log(`⚠️ Updated subscription ${subscription.id} status to past_due`);
+        
+        // Check if this is a retry attempt or first failure
+        const attemptCount = invoice.attempt_count || 1;
+        const isRetry = attemptCount > 1;
+        
+        // Auto-cancel subscription after 5 failed attempts
+        if (attemptCount >= 5) {
+          console.log(`🚫 Auto-canceling subscription after ${attemptCount} failed attempts`);
+          await stripe.subscriptions.cancel(invoice.subscription);
+          await Subscription.updateById(subscription.id, { status: "canceled" });
+          
+          // Send cancellation notification email
+          if (subscription.donor_email) {
+            console.log(`📧 Sending subscription cancellation notification to: ${subscription.donor_email}`);
+            
+            const cancellationEmailOptions = {
+              from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
+              to: subscription.donor_email,
+              subject: "Subscription Cancelled - Payment Failed",
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #e74c3c;">Subscription Cancelled</h2>
+                  <p>Dear ${subscription.donor_name || 'Valued Donor'},</p>
+                  <p>We're writing to inform you that your recurring donation subscription has been cancelled due to repeated payment failures.</p>
+                  <p><strong>What happened?</strong></p>
+                  <p>After 5 failed attempts to process your payment of <strong>${invoice.currency.toUpperCase()} ${(invoice.amount_due / 100).toFixed(2)}</strong>, we've automatically cancelled your subscription to prevent further failed charges.</p>
+                  <p><strong>What you can do:</strong></p>
+                  <ul>
+                    <li>Update your payment method and create a new subscription</li>
+                    <li>Contact us if you believe this was an error</li>
+                    <li>Make a one-time donation instead</li>
+                  </ul>
+                  <p>We truly appreciate your support and hope you'll consider resubscribing once your payment method is updated.</p>
+                  <p>Thank you for your understanding!</p>
+                  <p>Best regards,<br>Africa Access Water Team</p>
+                </div>
+              `
+            };
+            
+            await sendMail(cancellationEmailOptions);
+            console.log(`✅ Subscription cancellation notification sent to ${subscription.donor_email}`);
+          }
+        }
+        
+        // Send notification email to donor about failed payment (only if not cancelled)
+        if (subscription.donor_email && attemptCount < 5) {
+          console.log(`📧 Sending payment failure notification to: ${subscription.donor_email} (attempt ${attemptCount})`);
+          
+          const subject = isRetry 
+            ? `Payment Still Failed - Attempt ${attemptCount}`
+            : "Payment Failed - Action Required";
+          
+          const retryInfo = isRetry 
+            ? `<p><strong>This was attempt #${attemptCount}</strong> - Stripe will continue retrying automatically.</p>`
+            : `<p>Stripe will automatically retry this payment in a few days.</p>`;
+          
+          const emailOptions = {
+            from: `"Africa Access Water" <${process.env.EMAIL_USER}>`,
+            to: subscription.donor_email,
+            subject: subject,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #e74c3c;">Payment Failed</h2>
+                <p>Dear ${subscription.donor_name || 'Valued Donor'},</p>
+                <p>We encountered an issue processing your recurring donation of <strong>${invoice.currency.toUpperCase()} ${(invoice.amount_due / 100).toFixed(2)}</strong>.</p>
+                ${retryInfo}
+                <p><strong>What happened?</strong></p>
+                <ul>
+                  <li>Your payment method may have expired</li>
+                  <li>Insufficient funds in your account</li>
+                  <li>Your bank may have declined the transaction</li>
+                </ul>
+                <p><strong>What you can do:</strong></p>
+                <ul>
+                  <li>Update your payment method in your account</li>
+                  <li>Ensure sufficient funds are available</li>
+                  <li>Contact your bank if the issue persists</li>
+                </ul>
+                <p>If you continue to experience issues, please contact us.</p>
+                <p>Thank you for your continued support!</p>
+                <p>Best regards,<br>Africa Access Water Team</p>
+              </div>
+            `
+          };
+          
+          await sendMail(emailOptions);
+          console.log(`✅ Payment failure notification sent to ${subscription.donor_email}`);
+        }
+        
         break;
       }
 
@@ -338,3 +546,4 @@ exports.getProjectWithDonations = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
